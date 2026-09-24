@@ -1,0 +1,74 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  pythonVersion: '3.11'
+  webAppName: 'task-manager-devops-pipeline'
+  azureServiceConnection: 'YOUR-SERVICE-CONNECTION-NAME'
+
+stages:
+
+- stage: Build
+  displayName: Build and Test
+
+  jobs:
+  - job: Build
+
+    steps:
+
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(pythonVersion)'
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+      displayName: Install dependencies
+
+    - script: |
+        pytest
+      displayName: Run tests
+
+    - task: ArchiveFiles@2
+      displayName: Package application
+      inputs:
+        rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
+        includeRootFolder: false
+        archiveType: zip
+        archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+        replaceExistingArchive: true
+
+    - task: PublishBuildArtifacts@1
+      displayName: Publish artifact
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/app.zip'
+        artifactName: drop
+
+
+- stage: Deploy
+  displayName: Deploy to Azure
+
+  dependsOn: Build
+  condition: succeeded()
+
+  jobs:
+  - job: Deploy
+
+    steps:
+
+    - task: AzureWebApp@1
+      displayName: Deploy Flask application
+      inputs:
+        azureSubscription: '$(azureServiceConnection)'
+        appType: 'webAppLinux'
+        appName: '$(webAppName)'
+        package: '$(Pipeline.Workspace)/drop/app.zip'
+        startUpCommand: 'gunicorn --bind=0.0.0.0:8000 app:app'
