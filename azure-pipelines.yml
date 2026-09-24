@@ -1,8 +1,3 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
-
 trigger:
 - main
 
@@ -16,6 +11,9 @@ variables:
 
 stages:
 
+# =========================
+# BUILD STAGE
+# =========================
 - stage: Build
   displayName: Build and Test
 
@@ -24,35 +22,45 @@ stages:
 
     steps:
 
+    # Install Python
     - task: UsePythonVersion@0
+      displayName: Use Python 3.11
       inputs:
         versionSpec: '$(pythonVersion)'
 
+    # Install dependencies
     - script: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
       displayName: Install dependencies
 
+    # Run tests
     - script: |
         pytest
       displayName: Run tests
 
+    # Create ZIP package
     - task: ArchiveFiles@2
       displayName: Package application
       inputs:
         rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
         includeRootFolder: false
-        archiveType: zip
+        archiveType: 'zip'
         archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
         replaceExistingArchive: true
 
+    # Publish ZIP as build artifact
     - task: PublishBuildArtifacts@1
-      displayName: Publish artifact
+      displayName: Publish application artifact
       inputs:
         pathToPublish: '$(Build.ArtifactStagingDirectory)/app.zip'
-        artifactName: drop
+        artifactName: 'drop'
+        publishLocation: 'Container'
 
 
+# =========================
+# DEPLOY STAGE
+# =========================
 - stage: Deploy
   displayName: Deploy to Azure
 
@@ -64,6 +72,16 @@ stages:
 
     steps:
 
+    # Download artifact produced by Build stage
+    - task: DownloadBuildArtifacts@1
+      displayName: Download build artifact
+      inputs:
+        buildType: 'current'
+        downloadType: 'single'
+        artifactName: 'drop'
+        downloadPath: '$(Pipeline.Workspace)'
+
+    # Deploy ZIP to Azure App Service
     - task: AzureWebApp@1
       displayName: Deploy Flask application
       inputs:
